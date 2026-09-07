@@ -1,0 +1,98 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Deny everything by default — every path below must explicitly allow.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // users/{uid}  — a user's own root profile document
+    // ---------------------------------------------------------------------
+    match /users/{uid} {
+      allow read, update, delete: if isOwner(uid);
+      // Creation happens via the backend (server-side, using the Admin SDK,
+      // which bypasses rules) right after signup, so client-side create is
+      // intentionally NOT allowed here — keeps profile creation consistent
+      // and auditable server-side.
+      allow create: if false;
+
+      // -----------------------------------------------------------------
+      // users/{uid}/journals/{journalId}
+      // -----------------------------------------------------------------
+      match /journals/{journalId} {
+        allow read, delete: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidJournal();
+        allow update: if isOwner(uid) && isValidJournal();
+
+        match /messages/{messageId} {
+          allow read, delete: if isOwner(uid);
+          allow create: if isOwner(uid) && isValidMessage();
+          // Messages are immutable once written (journaling integrity)
+          allow update: if false;
+        }
+      }
+
+      // -----------------------------------------------------------------
+      // users/{uid}/insights/{insightId}
+      // -----------------------------------------------------------------
+      match /insights/{insightId} {
+        allow read, delete: if isOwner(uid);
+        // Insights are generated server-side only (Admin SDK bypasses rules)
+        allow create, update: if false;
+      }
+
+      // -----------------------------------------------------------------
+      // users/{uid}/timelines/{timelineId} — AI-generated growth timeline
+      // -----------------------------------------------------------------
+      match /timelines/{timelineId} {
+        allow read, delete: if isOwner(uid);
+        // Generated server-side only, same as insights.
+        allow create, update: if false;
+      }
+
+      // -----------------------------------------------------------------
+      // users/{uid}/settings/{settingId}
+      // -----------------------------------------------------------------
+      match /settings/{settingId} {
+        allow read, write: if isOwner(uid) && isValidSettings();
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // The core rule: request.auth.uid MUST equal the {uid} path segment.
+    // A client can never read/write a path with someone else's uid, no
+    // matter what user id it sends in the request body or URL.
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidJournal() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['createdAt', 'updatedAt', 'status'])
+        && data.status in ['active', 'ended']
+        && (!data.keys().hasAny(['title']) || data.title is string)
+        && (!data.keys().hasAny(['messageCount']) || data.messageCount is int);
+    }
+
+    function isValidMessage() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['role', 'content', 'timestamp'])
+        && data.role in ['user', 'model']
+        && data.content is string
+        && data.content.size() < 8000;
+    }
+
+    function isValidSettings() {
+      return request.resource.data.size() < 50;
+    }
+  }
+}
