@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Google Cloud / Firebase credentials
+service-account*.json
+*-service-account*.json
+service-account.json
+credentials.json
+*.pem
+*.key
+
+# Firebase local/generated files
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Build output
+dist/
+build/
+**/dist/
+**/build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cache / Coverage
+.vite/
+.cache/
+coverage/
+.nyc_output/
+
+.agents/
+skills-lock.json
